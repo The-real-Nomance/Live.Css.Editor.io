@@ -1,63 +1,58 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Live CSS Editor</title>
-  <link rel="stylesheet" href="style.css">
-</head>
-<body>
-<div class="app">
-      <div class="inspector">
-        <div class="inspector-header">
-          <span>Selected Element</span>
-          <span id="selectedPath">none</span>
-        </div>
-        <div class="style-grid" id="styleControls"></div>
-        <hr>
-        <div class="override-output" id="overrideDisplay">no overrides yet, click an element and change a property</div>
-        <div class="actions">
-          <button id="copyOverrideBtn" class="btn">Copy</button>
-          <button id="clearOverridesBtn" class="btn">Clear All</button>
-        </div>
-      </div>
+Live Preview: Renders your uploaded HTML inside an isolated iframe so it doesn't mess with the main application UI.
 
-  <div class="two-columns">
-    <div class="left-editors">
-      <div class="raw-panel">
-        <div class="raw-header">HTML</div>
-        <div id="htmlDisplay"></div>
-      </div>
-      <div class="raw-panel">
-        <div class="raw-header">CSS</div>
-        <textarea id="overrideEditor" placeholder="your custom overrides will appear here  copy this into your own CSS file"></textarea>
-      </div>
-    </div>
+    Click-to-Inspect: Hovering over elements shows a dotted outline, and clicking selects them to load their computed styles.
 
-    <div class="right-preview">
-      <div class="preview-container">
-        <div class="preview-header">
-          <span>Live Preview</span>
-          <button id="refreshPreviewBtn" class="btn">Reload</button>
-        </div>
-        <iframe id="previewFrame" title="live preview"></iframe>
-      </div>
+    Automatic Selectors: The tool attempts to generate a clean CSS selector automatically by checking for IDs, classes, or walking up the DOM tree to find parent tags.
 
-  <div class="header">
-    <div>
-      <h1>Fuck Tradition, Embrace Modernity</h1>
-      <div class="sub">Upload HTML on the side </div>
-    </div>
-    <div class="upload-panel">
-      <label for="fileInput" class="file-label">Upload</label>
-      <input type="file" id="fileInput" accept="text/html,.html">
-      <span id="uploadStatus" class="status-badge">ready</span>
-    </div>
-  </div>
+    Visual Controls: Quick sliders, color pickers, and dropdowns for common properties:
 
-    </div>
-  </div>
-</div>
-<script src="script.js" defer></script>
-</body>
-</html>
+        Colors (Text and Background)
+
+        Typography (Font size, weight, alignment)
+
+        Box Model (Padding, margin, borders, width)
+
+        Layout (Display types like block, flex, grid, etc.)
+
+    CSS Generation: Outputs structured, ready-to-copy CSS utilizing !important to ensure the rules actually override your existing stylesheets.
+
+    100% Local: Uses the HTML5 FileReader API. Everything runs directly in your browser, so your files are never uploaded to a server.
+
+File Structure
+
+The project is completely self-contained and split into three core files:
+Plaintext
+
+├── index.html       # Layout structure, editor panels, and inspector UI
+├── style.css        # Responsive layout and typography styling
+└── script.js        # Event handling, selector generation, and preview rendering
+
+How It Works
+
+    File Loading: The script reads your local HTML file as text. If no file is uploaded on load, it falls back to a built-in demo page so you can try it out immediately.
+
+    Style Injection: When you change a property in the UI, the script compiles your modifications into a CSS string. It then injects a custom <style id="live-overrides"> block into the header of the iframe's srcdoc.
+
+    Event Listener Binding: Every time the preview rebuilts, the script loops through the iframe's DOM elements and binds mouseover, mouseout, and click listeners to handle the inspector highlights and selection.
+
+    Selector Logic: The getSelector() function recursively checks the targeted element. It prioritizes IDs first, falls back to the primary class name if available, and defaults to standard parent-child traversal (parent > child) if needed.
+
+Getting Started
+
+Since this is a purely static frontend project, there is no installation or build step required.
+
+    Clone or download this repository.
+
+    Double-click index.html to open it in any modern web browser.
+
+    Use the preloaded demo page to test it out, or drop your own HTML file right onto the page.
+
+Usage
+
+    Upload: Click the upload label or drag an .html file anywhere into the window.
+
+    Select: Move your mouse into the live preview pane and click the element you want to edit.
+
+    Tweak: Use the generated controls in the inspector panel to change colors, fonts, or spacing.
+
+    Export: Copy the compiled CSS from the editor panel on the left (or the output block at the bottom) and paste it directly into your own project's stylesheet
