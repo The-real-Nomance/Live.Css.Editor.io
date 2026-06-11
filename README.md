@@ -1,23 +1,3 @@
-Live Preview: Renders your uploaded HTML inside an isolated iframe so it doesn't mess with the main application UI.
-
-    Click-to-Inspect: Hovering over elements shows a dotted outline, and clicking selects them to load their computed styles.
-
-    Automatic Selectors: The tool attempts to generate a clean CSS selector automatically by checking for IDs, classes, or walking up the DOM tree to find parent tags.
-
-    Visual Controls: Quick sliders, color pickers, and dropdowns for common properties:
-
-        Colors (Text and Background)
-
-        Typography (Font size, weight, alignment)
-
-        Box Model (Padding, margin, borders, width)
-
-        Layout (Display types like block, flex, grid, etc.)
-
-    CSS Generation: Outputs structured, ready-to-copy CSS utilizing !important to ensure the rules actually override your existing stylesheets.
-
-    100% Local: Uses the HTML5 FileReader API. Everything runs directly in your browser, so your files are never uploaded to a server.
-
 File Structure
 
 The project is completely self-contained and split into three core files:
