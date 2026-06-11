@@ -1,403 +1,317 @@
-//fuckass functions 
-  (function(){
-    const fileInput = document.getElementById('fileInput');
-    const htmlDisplay = document.getElementById('htmlDisplay');
-    const overrideEditor = document.getElementById('overrideEditor');
-    const previewFrame = document.getElementById('previewFrame');
-    const styleControlsDiv = document.getElementById('styleControls');
-    const overrideDisplay = document.getElementById('overrideDisplay');
-    const selectedPathSpan = document.getElementById('selectedPath');
-    const refreshPreviewBtn = document.getElementById('refreshPreviewBtn');
-    const copyOverrideBtn = document.getElementById('copyOverrideBtn');
-    const clearOverridesBtn = document.getElementById('clearOverridesBtn');
-    const uploadStatus = document.getElementById('uploadStatus');
-
-    let currentIframeDoc = null;
-    let selectedElement = null;
-    let hoveredElement = null;
-    let originalHtmlString = '';
-    let overrides = {};
-
-    function clearSelectedElement() {
-      if (!selectedElement) return;
-      selectedElement.style.outline = '';
-      selectedElement = null;
-      selectedPathSpan.innerText = 'none';
-      styleControlsDiv.innerHTML = '';
-    }
-
-    function updateOverrideUI() {
-      let output = '';
-      for (let sel in overrides) {
-        let props = overrides[sel];
-        if (Object.keys(props).length === 0) continue;
-        output += sel + ' {\n';
-        for (let prop in props) {
-          output += `  ${prop}: ${props[prop]};\n`;
-        }
-        output += '}\n\n';
-      }
-      if (output === '') {
-        output = 'no overrides  click an element and adjust a property';
-      }
-      overrideEditor.value = output;
-      overrideDisplay.textContent = output;
-    }
-
-    function rebuildPreview() {
-      if (!originalHtmlString) {
-        previewFrame.srcdoc = '<div style="padding:2rem; font-family:monospace;">upload an HTML file to start</div>';
-        return;
-      }
-      
-      let overrideCss = '';
-      for (let sel in overrides) {
-        let props = overrides[sel];
-        if (Object.keys(props).length === 0) continue;
-        overrideCss += sel + ' {\n';
-        for (let prop in props) {
-          overrideCss += `  ${prop}: ${props[prop]} !important;\n`;
-        }
-        overrideCss += '}\n\n';
-      }
-      
-      let htmlWithOverrides = originalHtmlString;
-      const styleTag = `<style id="live-overrides">\n${overrideCss}\n</style>`;
-      if (htmlWithOverrides.includes('</head>')) {
-        htmlWithOverrides = htmlWithOverrides.replace('</head>', `${styleTag}\n</head>`);
-      } else if (htmlWithOverrides.includes('<head>')) {
-        htmlWithOverrides = htmlWithOverrides.replace('<head>', `<head>\n${styleTag}\n`);
-      } else {
-        htmlWithOverrides = `<!DOCTYPE html>\n<html>\n<head><meta charset="UTF-8">${styleTag}</head>\n<body>${htmlWithOverrides}</body>\n</html>`;
-      }
-      
-      const frameDoc = previewFrame.contentDocument || previewFrame.contentWindow.document;
-      frameDoc.open();
-      frameDoc.write(htmlWithOverrides);
-      frameDoc.close();
-      currentIframeDoc = frameDoc;
-      attachFrameEvents();
-      
-      if (selectedElement) {
-        let selector = selectedPathSpan.innerText;
-        if (selector && selector !== ' none ') {
-          let newEl = currentIframeDoc.querySelector(selector);
-          if (newEl) {
-            selectedElement = newEl;
-            selectedElement.style.outline = '2px solid #bd6b3b';
-            renderStyleControls(selectedElement, selector);
-          } else {
-            clearSelectedElement();
-          }
-        } else {
-          clearSelectedElement();
-        }
-      }
-    }
-
-    function attachFrameEvents() {
-      if (!currentIframeDoc) return;
-      const all = currentIframeDoc.querySelectorAll('*');
-      all.forEach(el => {
-        el.removeEventListener('mouseover', hoverHandler);
-        el.removeEventListener('mouseout', unhoverHandler);
-        el.removeEventListener('click', clickHandler);
-        el.addEventListener('mouseover', hoverHandler);
-        el.addEventListener('mouseout', unhoverHandler);
-        el.addEventListener('click', clickHandler);
-      });
-      if (currentIframeDoc.body) {
-        currentIframeDoc.body.removeEventListener('mouseover', hoverHandler);
-        currentIframeDoc.body.removeEventListener('mouseout', unhoverHandler);
-        currentIframeDoc.body.removeEventListener('click', clickHandler);
-        currentIframeDoc.body.addEventListener('mouseover', hoverHandler);
-        currentIframeDoc.body.addEventListener('mouseout', unhoverHandler);
-        currentIframeDoc.body.addEventListener('click', clickHandler);
-      }
-    }
-//for the hover
-    function hoverHandler(e) {
-      e.stopPropagation();
-      const target = e.target;
-      if (hoveredElement === target) return;
-      if (hoveredElement) hoveredElement.style.outline = '';
-      hoveredElement = target;
-      hoveredElement.style.outline = '1px dotted #b48b5a';
-    }
-//opposite of hover
-    function unhoverHandler(e) {
-      if (hoveredElement) {
-        hoveredElement.style.outline = '';
-        hoveredElement = null;
-      }
-    }
-
-    function clickHandler(e) {
-      e.stopPropagation();
-      e.preventDefault();
-      const target = e.target;
-      if (selectedElement === target) return;
-      clearSelectedElement();
-      selectedElement = target;
-      selectedElement.style.outline = '2px solid #bd6b3b';
-      const selector = getSelector(selectedElement);
-      selectedPathSpan.innerText = selector;
-      renderStyleControls(selectedElement, selector);
-    }
-//good enough not really worth the effort
-    function getSelector(el) {
-      if (!el) return 'unknown';
-      if (el === currentIframeDoc?.body) return 'body';
-      if (el.id && el.id.trim() !== '') return '#' + el.id;
-      let tag = el.tagName.toLowerCase();
-      if (el.className && typeof el.className === 'string') {
-        const classes = el.className.trim().split(/\s+/);
-        if (classes.length) return tag + '.' + classes[0];
-      }
-      let parent = el.parentElement;
-      if (parent && parent !== currentIframeDoc?.body && parent.tagName) {
-        let parentSel = getSelector(parent);
-        if (parentSel && parentSel !== 'body') return parentSel + ' > ' + tag;
-      }
-      return tag;
-    }
-
-    function addOverride(selector, property, value) {
-      if (!selector) return;
-      overrides[selector] ??= {};
-      if (value === '' || value == null) {
-        delete overrides[selector][property];
-        if (!Object.keys(overrides[selector]).length) delete overrides[selector];
-      } else {
-        overrides[selector][property] = value;
-      }
-      updateOverrideUI();
-      rebuildPreview();
-    }
-//DONT MESS WITH THESE PROPERTIES took a fuck ton of time to figure out 
-    function renderStyleControls(element, selector) {
-      if (!element || !currentIframeDoc) return;
-      styleControlsDiv.innerHTML = '';
-      const computed = currentIframeDoc.defaultView.getComputedStyle(element);
-      
-      const createColorControl = (label, prop) => {
-        const fieldDiv = document.createElement('div');
-        fieldDiv.className = 'style-field';
-        const labelSpan = document.createElement('span');
-        labelSpan.textContent = label;
-        fieldDiv.appendChild(labelSpan);
-        const wrap = document.createElement('div');
-        wrap.style.display = 'flex';
-        wrap.style.gap = '4px';
-        const colorPicker = document.createElement('input');
-        colorPicker.type = 'color';
-        let currentColor = computed.getPropertyValue(prop);
-        if (!currentColor || currentColor === 'transparent') currentColor = '#000000';
-        const toHex = (rgb) => {
-          if (!rgb || rgb === 'transparent') return '#000000';
-          if (rgb.startsWith('#')) return rgb;
-          const m = rgb.match(/^rgba?\((\d+),\s*(\d+),\s*(\d+)/);
-          if (!m) return '#000000';
-          return '#' + ((1 << 24) + (parseInt(m[1]) << 16) + (parseInt(m[2]) << 8) + parseInt(m[3])).toString(16).slice(1);
-        };
-        colorPicker.value = toHex(currentColor);
-        const textInput = document.createElement('input');
-        textInput.type = 'text';
-        textInput.value = colorPicker.value;
-        textInput.style.width = '70px';
-        const updateColor = (val) => {
-          addOverride(selector, prop, val);
-        };
-        colorPicker.addEventListener('input', (e) => {
-          textInput.value = e.target.value;
-          updateColor(e.target.value);
-        });
-        textInput.addEventListener('change', (e) => updateColor(e.target.value));
-        wrap.appendChild(colorPicker);
-        wrap.appendChild(textInput);
-        fieldDiv.appendChild(wrap);
-        return fieldDiv;
-      };
-      
-      const createSelectControl = (label, prop, options) => {
-        const fieldDiv = document.createElement('div');
-        fieldDiv.className = 'style-field';
-        const labelSpan = document.createElement('span');
-        labelSpan.textContent = label;
-        fieldDiv.appendChild(labelSpan);
-        const select = document.createElement('select');
-        for (let opt of options) {
-          const option = document.createElement('option');
-          option.value = opt;
-          option.textContent = opt;
-          let currentVal = computed.getPropertyValue(prop);
-          if (currentVal === opt) option.selected = true;
-          select.appendChild(option);
-        }
-        select.addEventListener('change', (e) => {
-          addOverride(selector, prop, e.target.value);
-        });
-        fieldDiv.appendChild(select);
-        return fieldDiv;
-      };
-      
-      const createTextControl = (label, prop, placeholder) => {
-        const fieldDiv = document.createElement('div');
-        fieldDiv.className = 'style-field';
-        const labelSpan = document.createElement('span');
-        labelSpan.textContent = label;
-        fieldDiv.appendChild(labelSpan);
-        const input = document.createElement('input');
-        input.type = 'text';
-        input.placeholder = placeholder || '';
-        let compVal = computed.getPropertyValue(prop);
-        if (compVal && compVal !== 'none') input.value = compVal;
-        input.addEventListener('change', (e) => {
-          addOverride(selector, prop, e.target.value);
-        });
-        fieldDiv.appendChild(input);
-        return fieldDiv;
-      };
-      
-      let properties = [
-        { label: 'color', prop: 'color', type: 'color' },
-        { label: 'background', prop: 'background-color', type: 'color' },
-        { label: 'font-size', prop: 'font-size', type: 'text', placeholder: '1rem' },
-        { label: 'font-weight', prop: 'font-weight', type: 'select', options: ['normal','bold','100','300','400','500','600','700','800'] },
-        { label: 'padding', prop: 'padding', type: 'text', placeholder: '0.5rem' }
-      ];
-      properties.push(
-        { label: 'margin', prop: 'margin', type: 'text', placeholder: '0' },
-        { label: 'border', prop: 'border', type: 'text', placeholder: '1px solid #aaa' },
-        { label: 'text-align', prop: 'text-align', type: 'select', options: ['left','center','right','justify'] },
-        { label: 'width', prop: 'width', type: 'text', placeholder: 'auto' },
-        { label: 'display', prop: 'display', type: 'select', options: ['block','inline','inline-block','flex','grid','none'] }
-      );
-      
-      for (let p of properties) {
-        let control;
-        if (p.type === 'color') {
-          control = createColorControl(p.label, p.prop);
-        } else if (p.type === 'select') {
-          control = createSelectControl(p.label, p.prop, p.options);
-        } else {
-          control = createTextControl(p.label, p.prop, p.placeholder);
-        }
-        styleControlsDiv.appendChild(control);
-      }
-    }
-
-    function loadHtmlFromFile(file) {
-      if (!file) return;
-      uploadStatus.textContent = 'loading...';
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const content = e.target.result;
-        originalHtmlString = content;
-        htmlDisplay.textContent = content;
-        overrides = {};
-        updateOverrideUI();
-        rebuildPreview();
-        uploadStatus.textContent = 'click any element';
-        setTimeout(() => {
-          if (uploadStatus.textContent === 'click any element') uploadStatus.textContent = 'ready';
-        }, 2000);
-      };
-      reader.onerror = () => {
-        uploadStatus.textContent = 'error reading file';
-      };
-      reader.readAsText(file);
-    }
-
-    fileInput.addEventListener('change', (e) => {
-      if (e.target.files && e.target.files[0]) loadHtmlFromFile(e.target.files[0]);
-    });
-
-    document.body.addEventListener('dragover', (e) => {
-      e.preventDefault();
-      e.dataTransfer.dropEffect = 'copy';
-    });
-    document.body.addEventListener('drop', (e) => {
-      e.preventDefault();
-      const files = e.dataTransfer.files;
-      if (files && files.length && files[0].name.match(/\.html?$/i)) {
-        loadHtmlFromFile(files[0]);
-      } else if (files.length) {
-        alert('drop an .html file');
-      }
-    });
-
-    refreshPreviewBtn.addEventListener('click', () => {
-      rebuildPreview();
-    });
-
-    copyOverrideBtn.addEventListener('click', () => {
-      const text = overrideEditor.value;
-      navigator.clipboard.writeText(text).then(() => {
-        uploadStatus.textContent = 'copied to clipboard';
-        setTimeout(() => { if (uploadStatus.textContent === 'copied to clipboard') uploadStatus.textContent = 'ready'; }, 1500);
-      });
-    });
-
-    clearOverridesBtn.addEventListener('click', () => {
-      overrides = {};
-      updateOverrideUI();
-      rebuildPreview();
-      clearSelectedElement();
-    });
-
-    document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape' && selectedElement) {
-        clearSelectedElement();
-      }
-    });
-//this demo is pretty shit but it kinda works?
-    const demoHtml = `<!DOCTYPE html>
-<html>
-<head>
-<meta charset="UTF-8">
-<title>demo</title>
-<style>
-body {
-  background: #fef6ef;
-  font-family: Georgia, serif;
-  margin: 2rem;
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  overflow: hidden;
 }
-.card {
-  max-width: 800px;
-  background: white;
-  border-left: 8px solid #b48b5a;
+
+body {
+  background: #fefaf5;
+  color: #1a1612;
+  font-family: 'Courier New', 'SF Mono', 'Georgia', serif;
+  font-size: 0.95rem;
+  line-height: 1.45;
   padding: 1.5rem;
 }
-h1 {
-  font-weight: normal;
-  color: #2d2b26;
+
+.app {
+  max-width: 1600px;
+  margin: 0 auto;
+  overflow: hidden;    
 }
-button {
-  background: #e7d5c2;
-  border: 1px solid #9f7c58;
-  padding: 0.3rem 1rem;
+
+.header {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: baseline;
+  border-bottom: 1px solid #b7a082;
+  padding-bottom: 0.8rem;
+  margin-bottom: 1.8rem;
+  gap: 1rem;
+  overflow: hidden;    
+}
+
+h1 {
+  font-size: 2rem;
+  font-weight: 600;
+  font-family: 'Times New Roman', Georgia, serif;
+  background: #fff1e6;
+  display: inline-block;
+  padding-right: 1rem;
+  border-right: 5px solid #b28b65;
+  letter-spacing: -0.3px;
+}
+
+.sub {
+  font-family: monospace;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  color: #5e4b34;
+  margin-top: 0.2rem;
+}
+
+.upload-panel {
+  background: #fff7f0;
+  border: 2px dashed #b28b65;
+  padding: 0.4rem 1rem;
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  flex-wrap: wrap;
+  box-shadow: 3px 3px 0 #e2cfbb;
+}
+
+.file-label {
+  cursor: pointer;
+  text-decoration: underline;
+  font-weight: bold;
+  font-family: monospace;
+}
+
+#fileInput {
+  display: none;
+}
+
+.btn {
+  background: #e7dbce;
+  border: 1px solid #9b7a5c;
+  padding: 0.2rem 0.8rem;
+  font-family: 'Courier New', monospace;
+  font-size: 0.75rem;
   cursor: pointer;
 }
-.highlight {
-  background: #f1e8df;
-  padding: 0.6rem;
+
+.btn:hover {
+  background: #dacbbc;
 }
+
+.status-badge {
+  font-size: 0.7rem;
+  background: #f2e4d8;
+  padding: 0.2rem 0.5rem;
+  font-family: monospace;
+}
+
+.two-columns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2rem;
+}
+
+.left-editors {
+  flex: 1.2;
+  min-width: 280px;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.raw-panel {
+  height: 320px;
+  background: #ffffff;
+  border: 1px solid #c9b8a4;
+  box-shadow: 4px 4px 0 #e5d5c4;
+  display: flex;
+  flex-direction: column;
+}
+
+.raw-header {
+  background: #f2e7dd;
+  padding: 0.5rem 0.8rem;
+  border-bottom: 1px solid #cbbca8;
+  font-weight: bold;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  display: flex;
+  justify-content: space-between;
+}
+
+textarea {
+  width: 100%;
+  padding: 0.8rem;
+  font-family: 'Courier New', monospace;
+  font-size: 0.8rem;
+  border: none;
+  background: #fffef7;
+  resize: none;
+  outline: none;
+  color: #1e1914;
+}
+
+textarea:focus {
+  background: #fffff2;
+  outline: 1px solid #b28b65;
+}
+
+#htmlDisplay {
+  height: 280px;
+  overflow: auto;
+  white-space: pre-wrap;
+  font-family: 'Courier New', monospace;
+  font-size: 0.8rem;
+  background: #fffef7;
+  padding: 0.8rem;
+  border: none;
+}
+
+#overrideEditor {
+  height: 200px;
+}
+
+.right-preview {
+  flex: 2;
+  min-width: 500px;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.preview-container {
+  background: #fffdf9;
+  border: 1px solid #cbbca8;
+  box-shadow: -3px 3px 0 #e1cfbb;
+}
+
+.preview-header {
+  background: #e8ddd0;
+  padding: 0.5rem 1rem;
+  font-family: monospace;
+  font-weight: bold;
+  border-bottom: 2px solid #bca98f;
+  display: flex;
+  justify-content: space-between;
+}
+
+iframe {
+  width: 100%;
+  height: 55vh;
+  min-height: 400px;
+  border: 0;
+  background: white;
+}
+
+.inspector {
+  background: #fef8f2;
+  border: 1px solid #cfbeab;
+  padding: 0.8rem;
+  height: 210px;           
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  overflow: hidden;       
+}
+
+.inspector-header {
+  font-weight: bold;
+  background: #e8dbcf;
+  margin: -0.8rem -0.8rem 0 -0.8rem;
+  padding: 0.4rem 0.8rem;
+  border-bottom: 1px solid #cbb8a2;
+  font-size: 0.8rem;
+  display: flex;
+  justify-content: space-between;
+  flex-shrink: 0;     
+  overflow: hidden;    
+}
+
+#selectedPath {
+  font-family: monospace;
+  background: #f2e4d8;
+  padding: 0.2rem 0.5rem;
+  font-size: 0.7rem;
+  max-width: 220px;
+  overflow-x: auto;
+  white-space: nowrap;
+}
+
+.style-grid {
+  flex-shrink: 0;           
+  max-height: 170px;
+  overflow-y: auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.8rem;
+  margin-top: 0.25rem;
+}
+
+.style-field {
+  flex: 1;
+  min-width: 140px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  font-size: 0.7rem;
+  font-weight: bold;
+}
+
+.style-field input,
+.style-field select {
+  background: white;
+  border: 1px solid #b29b7e;
+  font-family: 'Courier New', monospace;
+  padding: 0.2rem 0.4rem;
+  font-size: 0.7rem;
+}
+
+
+.override-output {
+  flex-shrink: 0;
+  height: 50px;            
+  overflow: hidden;    
+  background: #1e1b18;
+  color: #e6dccf;
+  padding: 0.8rem;
+  font-family: 'Courier New', monospace;
+  font-size: 0.7rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+  border: 1px solid #5f4e3a;
+}
+
+hr {
+  flex-shrink: 0;
+  margin: 0;
+  border: none;
+}
+
+.actions {
+  flex-shrink: 0;
+  margin-top: auto;        
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  overflow: hidden;    
+}
+
+@media (max-width: 850px) {
+  body {
+    padding: 1rem;
+  }
+
+  .two-columns {
+    flex-direction: column;
+  }
+
+  iframe {
+    height: 45vh;
+  }
+
+  #htmlDisplay {
+    height: 200px;
+  }
+
+  #overrideEditor {
+    height: 150px;
+  }
+
   
-</style>
-</head>
-<body>
-<div class="card">
-<h1>Click any Element</h1>
-<p>upload your own HTML file. select any element, adjust colors/spacing, then copy the generated CSS into your original file.</p>
-<button>try me</button>
-<div class="highlight">these overrides won't touch your source</div>
-</div>
-</body>
-</html>`;
-    originalHtmlString = demoHtml;
-    htmlDisplay.textContent = demoHtml;
-    overrides = {};
-    updateOverrideUI();
-    rebuildPreview();
-  })();
+  .inspector {
+    height: 440px;
+  }
+
+  .override-output {
+    height: 90px;
+  }
+  
+}
